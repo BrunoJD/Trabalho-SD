@@ -1,4 +1,3 @@
-bruno
 # Tranalho 1: cliente e servidor gRPC para aprendizado federado
 
 Este material foi organizado para que os alunos implementem **passo a passo** um cliente e um servidor gRPC para uma simulação de aprendizado federado com o dataset Iris.
