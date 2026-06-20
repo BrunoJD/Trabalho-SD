@@ -16,50 +16,36 @@ from common_fl import create_model_template, load_client_partition, local_train
 
 
 def params_from_proto(proto_params):
-    """
-    Converte uma mensagem ModelParameters do protobuf para a estrutura usada no código:
+    """ 
+    Converte uma mensagem ModelParameters do protobuf para a estrutura usada no código: 
     [coef, intercept], em que ambos são arrays NumPy.
-
-    Dica:
-    - coef_values contém os pesos em formato achatado (flatten)
-    - coef_shape diz como reconstruir a matriz original
-    - intercept_values contém o vetor de interceptos
     """
-    # TODO: implemente a conversão do protobuf para NumPy.
-    raise NotImplementedError("Implemente params_from_proto")
+    coef = np.array(proto_params.coef_values, dtype = np.float64)
+    coef = coef.reshape(proto_params.coef_shape)
+
+    intercept = np.array(proto_params.intercept_values, dtype = np.float64)
+    return [coef, intercept]
 
 
 
 def params_to_proto(params):
-    """
+    """ 
     Faz a operação inversa: recebe [coef, intercept] e devolve um ModelParameters.
-
-    Dica:
-    - use coef.ravel().tolist() para achatar a matriz
-    - use list(coef.shape) para guardar o formato
-    - use intercept.ravel().tolist() para serializar o intercepto
     """
-    # TODO: implemente a conversão de NumPy para protobuf.
-    raise NotImplementedError("Implemente params_to_proto")
+    coef, intercept = params
+
+    return federated_pb2.ModelParameters(coef_values = coef.ravel().tolist(), coef_shape = list(coef.shape), intercept_values = intercept.ravel().tolist())
 
 
 
 
 def build_client_update(cid, round_number, train_result):
-    """
+    """ 
     Monta a mensagem ClientUpdate que será enviada ao servidor.
-
-    Dicas:
-    O dicionário train_result, vindo de local_train, possui:
-    - train_result["num_examples"]
-    - train_result["train_loss"]
-    - train_result["train_acc"]
-    - train_result["params"]
-
-    Parâmetro model em ClientUpdate espera o tipo ModelParameters
     """
-    # TODO: crie e retorne federated_pb2.ClientUpdate(...)
-    raise NotImplementedError("Implemente build_client_update")
+    model_proto = params_to_proto(train_result["params"])
+
+    return federated_pb2.ClientUpdate(cid = cid, round = round_number, num_examples = train_result["num_examples"], train_loss = train_result["train_loss"], train_acc = train_result["train_acc"], model = model_proto)
 
 
 
@@ -72,6 +58,7 @@ def should_wait(global_round, completed_round):
     - se a rodada do servidor for menor ou igual à última rodada já concluída por este cliente,
       não há nada novo para fazer ainda.
     """
+    
     return global_round <= completed_round
 
 
@@ -101,6 +88,7 @@ def run_client(cid: int, server_address: str, num_clients: int, poll_interval: f
         stub = federated_pb2_grpc.FederatedLearningStub(channel)
 
         while True:
+            pass
             # TODO: peça o modelo global ao servidor com GetGlobalModel(...)
 
             # TODO: se global_model.done for True, avise no terminal e encerre o loop
