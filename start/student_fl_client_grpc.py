@@ -88,30 +88,81 @@ def run_client(cid: int, server_address: str, num_clients: int, poll_interval: f
         stub = federated_pb2_grpc.FederatedLearningStub(channel)
 
         while True:
-            pass
-            # TODO: peça o modelo global ao servidor com GetGlobalModel(...)
+            # Busca no servidor a versão mais recente do modelo global
+            try:
+                global_model = stub.GetGlobalModel(
+                   federated_pb2.ClientHello(cid=cid)
+                )
+                
+            except grpc.RpcError as e:
+                # Se o servidor já foi encerrado, o cliente também encerra
+                if e.code() == grpc.StatusCode.UNAVAILABLE:
+                    print(
+                        f"Cliente {cid}: servidor finalizou. Encerrando cliente."
+                    )
+                    break
 
-            # TODO: se global_model.done for True, avise no terminal e encerre o loop
+                raise
             
-            # Cliente dorme por um período
+           # Se o servidor informar que o treinamento terminou:
+           # o cliente pode encerrar a sua execução
+            if global_model.done:
+               print(f"Cliente {cid}: treinamento finalizado.")
+               break
+            # Evita que o cliente treine de novo na mesma rodada
+            if should_wait(global_model.round, completed_round):
+               time.sleep(poll_interval)
+               continue
+           
+            # Converte os parâmetros recebidos via gRPC para o formato usado pelo modelo local
+            global_params = params_from_proto(global_model.model)
 
-            # TODO: converta o modelo global recebido para parâmetros locais
+           # Treina o modelo usando os dados locais desse cliente
+            train_result = local_train(
+               X_train=X_train,
+               y_train=y_train,
+               global_params=global_params,
+               model_template=model_template,
+               local_epochs=local_epochs,
+            )
 
-            # TODO: treine localmente usando local_train(...)
+          # Monta a atualização que vai ser enviada ao servidor
+            update = build_client_update(
+               cid,
+               global_model.round,
+               train_result,
+            )
 
-            # TODO: monte o update com build_client_update(...)
+            try:
+                # Envia os parâmetros atualizados para o servidor
+               ack = stub.SubmitUpdate(update)
 
-            # TODO: envie o update com stub.SubmitUpdate(...). Use try...except p/ lidar com a exceção grpc.RpcError.
-            # Se seu código for grpc.StatusCode.UNAVAILABLE, imprima que o servidor finalizou e que estará finalizando
-            # o cliente.
+            except grpc.RpcError as e:
+               # Se o o servidor já tiver sido encerrado
+               # finalizamos o cliente também
+               if e.code() == grpc.StatusCode.UNAVAILABLE:
+                   print(
+                       f"Cliente {cid}: servidor finalizou. Encerrando cliente."
+                   )
+                   break
 
-            # TODO: se ack.accepted for True:
-            #   - atualize completed_round
-            #   - imprima a loss e a acc locais
-            # senão:
-            #   - imprima a mensagem de recusa
+               raise
+           # A rodada só é concluída se o servidor aceitar o update
+            if ack.accepted:
+               completed_round = global_model.round
 
-            # TODO: faça uma pequena espera entre as iterações
+               print(
+                   f"Cliente {cid} | "
+                   f"loss={train_result['train_loss']:.4f} | "
+                   f"acc={train_result['train_acc']:.4f}"
+               )
+           
+           # Se a atualização for recusada, mostra o motivo
+            else:
+               print(ack.message)
+
+           # Uma pausa antes da próxima consulta ao servidor.
+            time.sleep(poll_interval)
 
 
 if __name__ == "__main__":
